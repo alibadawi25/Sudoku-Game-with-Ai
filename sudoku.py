@@ -4,25 +4,38 @@ import random
 
 pygame.init()
 
-WIDTH, HEIGHT = 360, 360  # Perfectly divisible by 9 for cell size
+WIDTH, HEIGHT = 490, 360  
+SUDOKU_WIDTH, SUDOKU_HEIGHT = 360, 360
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Sudoku Grid")
 font = pygame.font.SysFont(None, 20)  # font and size
 
-square_size = WIDTH / 9
+square_size = SUDOKU_WIDTH / 9
 cells = [[0 for _ in range(9)] for _ in range(9)]
+
+clicked_number = 0
 
 options = [[list(range(1, 10)) for _ in range(9)] for _ in range(9)]
 
 def onClick(event):
+    global clicked_number
     xPos = event.pos[0]
     yPos = event.pos[1]
-    xCell = int(xPos/square_size)
-    yCell = int(yPos/square_size)
-    print("x cell: " + str(xCell))
-    print("y cell: " + str(yCell))
-    print("clicked on: " + str(cells[xCell][yCell]))
-    print("box no: " + str(get_box_number(xCell, yCell)))
+    if xPos < SUDOKU_WIDTH and yPos < SUDOKU_HEIGHT:
+        xCell = int(xPos/square_size)
+        yCell = int(yPos/square_size)
+        print("x cell: " + str(xCell))
+        print("y cell: " + str(yCell))
+        print("clicked on: " + str(cells[xCell][yCell]))
+        print("box no: " + str(get_box_number(xCell, yCell)))
+        if clicked_number != 0:
+            cells[xCell][yCell] = clicked_number
+    else:
+        if xPos < WIDTH and xPos > WIDTH-square_size:
+            numberClicked = int(yPos/square_size) + 1
+            print("Number Clicked: " + str(numberClicked))
+            clicked_number = numberClicked
+ 
 
 
 def generate_sudoku():
@@ -183,8 +196,14 @@ def is_valid(board, row, col, num):
 
     return True
 
-def remove_cells():
-    pass
+def remove_cells(count=45):
+    removed = 0
+    while removed < count:
+        row = random.randint(0, 8)
+        col = random.randint(0, 8)
+        if cells[row][col] != 0:
+            cells[row][col] = 0
+            removed += 1
 
 def create_puzzle():
     fill_board(cells)
@@ -218,8 +237,14 @@ while running:
         # Vertical lines
         pygame.draw.line(screen, (0, 0, 0), (i * square_size, 0), (i * square_size, HEIGHT), line_width)
         # Horizontal lines
-        pygame.draw.line(screen, (0, 0, 0), (0, i * square_size), (WIDTH, i * square_size), line_width)
+        pygame.draw.line(screen, (0, 0, 0), (0, i * square_size), (SUDOKU_WIDTH, i * square_size), line_width)
 
+    for i in range(9):
+        rect = pygame.Rect(WIDTH-square_size, i * square_size, square_size, square_size)
+        pygame.draw.rect(screen, (120, 0, 0), rect, 4)  # border width = 1    
+        text = font.render(str(i+1), True, (0, 0, 0))  # render text (number as string), black color
+        textWidth, textHeight = text.get_size()
+        screen.blit(text, ((WIDTH-square_size + (square_size/2)) - textWidth/2 , (i*square_size + (square_size/2)) - textHeight/2))
     draw_numbers(screen)
 
     pygame.display.flip()
