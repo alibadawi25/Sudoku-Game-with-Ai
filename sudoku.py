@@ -1,24 +1,34 @@
 import pygame
 import sys
 import random
+import time
 
 pygame.init()
 
 WIDTH, HEIGHT = 490, 360  
 SUDOKU_WIDTH, SUDOKU_HEIGHT = 360, 360
+
+
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Sudoku Grid")
 font = pygame.font.SysFont(None, 20)  # font and size
 
+# Load the image (once, outside the loop ideally)
+basket_img = pygame.image.load("Assets/Images/Basket.png").convert_alpha()
+basket_img_clicked = pygame.image.load("Assets/Images/Basket-Clicked.png").convert_alpha()
+
+loaded_img = basket_img
+# Get image and square sizes
+img_width, img_height = 32, 32
+
 square_size = SUDOKU_WIDTH / 9
 cells = [[0 for _ in range(9)] for _ in range(9)]
 
-clicked_number = 0
-
+selected_cell = None
 options = [[list(range(1, 10)) for _ in range(9)] for _ in range(9)]
 
-def onClick(event):
-    global clicked_number
+def on_click(event):
+    global selected_cell
     xPos = event.pos[0]
     yPos = event.pos[1]
     if xPos < SUDOKU_WIDTH and yPos < SUDOKU_HEIGHT:
@@ -28,15 +38,40 @@ def onClick(event):
         print("y cell: " + str(yCell))
         print("clicked on: " + str(cells[xCell][yCell]))
         print("box no: " + str(get_box_number(xCell, yCell)))
-        if clicked_number != 0:
-            cells[xCell][yCell] = clicked_number
-    else:
-        if xPos < WIDTH and xPos > WIDTH-square_size:
-            numberClicked = int(yPos/square_size) + 1
-            print("Number Clicked: " + str(numberClicked))
-            clicked_number = numberClicked
- 
+        selected_cell = (xCell, yCell)
+    elif xPos < WIDTH and xPos > WIDTH-square_size:
+        numberClicked = int(yPos/square_size) + 1
+        print("Number Clicked: " + str(numberClicked))
 
+        if selected_cell is None:
+            return
+    
+        row, col = selected_cell
+        cells[row][col] = numberClicked
+    elif is_delete_button_pos(event.pos):
+        if selected_cell is None:
+            return
+        row, col = selected_cell
+        cells[row][col] = 0
+        selected_cell = None
+
+def handle_key(event):
+    if selected_cell is None:
+        return
+
+    row, col = selected_cell
+    if event.key == pygame.K_SPACE:
+        create_unique_puzzle()
+    elif event.key in [pygame.K_BACKSPACE, pygame.K_DELETE]:
+        cells[row][col] = 0
+    elif event.unicode.isdigit():
+        num = int(event.unicode)
+        if 1 <= num <= 9:
+            cells[row][col] = num
+
+
+def is_delete_button_pos(pos):
+    return pos[0] < WIDTH - square_size and pos[0] > WIDTH - 2 * square_size and pos[1] < square_size
 
 def generate_sudoku():
     # for i in range(3):
@@ -166,20 +201,6 @@ def is_sudoku_valid():
 
     return True
 
-def fill_board(board):
-    for row in range(9):
-        for col in range(9):
-            if board[row][col] == 0:
-                random.shuffle(nums := list(range(1, 10)))
-                for num in nums:
-                    if is_valid(board, row, col, num):
-                        board[row][col] = num
-                        if fill_board(board):
-                            return True
-                        board[row][col] = 0
-                return False
-    return True
-
 def is_valid(board, row, col, num):
     if num in board[row]:
         return False
@@ -196,7 +217,7 @@ def is_valid(board, row, col, num):
 
     return True
 
-def remove_cells(count=45):
+def remove_cells_random(count=45):
     removed = 0
     while removed < count:
         row = random.randint(0, 8)
@@ -205,15 +226,70 @@ def remove_cells(count=45):
             cells[row][col] = 0
             removed += 1
 
+
+def count_solutions(board):
+    count = [0]
+    
+    def solve(b):
+        if count[0] > 1:
+            return  # stop early if more than 1 solution found
+        for row in range(9):
+            for col in range(9):
+                if b[row][col] == 0:
+                    for num in range(1, 10):
+                        if is_valid(b, row, col, num):
+                            b[row][col] = num
+                            solve(b)
+                            b[row][col] = 0
+                    return
+        count[0] += 1
+
+    copied = [row[:] for row in board]
+    solve(copied)
+    return count[0]
+
+def remove_cells_unique(board, attempts=40):
+    while attempts > 0:
+        row = random.randint(0, 8)
+        col = random.randint(0, 8)
+        if board[row][col] == 0:
+            continue
+
+        backup = board[row][col]
+        board[row][col] = 0
+
+        if count_solutions(board) != 1:
+            board[row][col] = backup  # restore if not unique
+        else:
+            attempts -= 1
+
+def clear_sudoku():
+    global options
+    options = [[list(range(1, 10)) for _ in range(9)] for _ in range(9)]
+    for i in range(9):
+        for j in range(9):
+            cells[i][j]=0
+
+def create_unique_puzzle():
+    clear_sudoku()
+    while not is_filled(cells):
+        generate_sudoku()
+        if not is_filled(cells):
+            clear_sudoku()
+    remove_cells_unique(cells, attempts=10)  
+
+
+
 def create_puzzle():
-    fill_board(cells)
-    remove_cells()
+    clear_sudoku()
+    while not is_filled(cells):
+        generate_sudoku()
+        if not is_filled(cells):
+            clear_sudoku()
+    remove_cells_random()
 
 
 
-
-
-create_puzzle()
 
 running = True
 while running:
@@ -221,9 +297,17 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         if event.type == pygame.MOUSEBUTTONDOWN:
-            onClick(event)
+            on_click(event)
+            if is_delete_button_pos(event.pos):
+                loaded_img = basket_img_clicked
+        if event.type == pygame.MOUSEBUTTONUP:
+            if loaded_img == basket_img_clicked:
+                loaded_img = basket_img
+        if event.type == pygame.KEYDOWN:
+            handle_key(event)
 
     screen.fill((255, 255, 255))  # White background
+
 
     # Draw thin cell borders
     for i in range(9):
@@ -241,10 +325,27 @@ while running:
 
     for i in range(9):
         rect = pygame.Rect(WIDTH-square_size, i * square_size, square_size, square_size)
-        pygame.draw.rect(screen, (120, 0, 0), rect, 4)  # border width = 1    
+        pygame.draw.rect(screen, (120, 0, 0), rect, 4)  # border width = 4   
         text = font.render(str(i+1), True, (0, 0, 0))  # render text (number as string), black color
         textWidth, textHeight = text.get_size()
         screen.blit(text, ((WIDTH-square_size + (square_size/2)) - textWidth/2 , (i*square_size + (square_size/2)) - textHeight/2))
+
+    # Define the square
+    rect = pygame.Rect(WIDTH - 2 * square_size, 0, square_size, square_size)
+    pygame.draw.rect(screen, (0, 120, 0), rect, 4)
+
+
+    square_center_x = rect.x + rect.width // 2
+    square_center_y = rect.y + rect.height // 2
+
+    # Compute top-left to center image
+    img_x = square_center_x - img_width // 2
+    img_y = square_center_y - img_height // 2
+
+    # Draw image centered in the square
+    screen.blit(loaded_img, (img_x, img_y))
+
+
     draw_numbers(screen)
 
     pygame.display.flip()
